@@ -1,0 +1,322 @@
+#include <iostream>
+#include <vector>
+#include <map>
+#include <fstream>
+#include <string>
+#include <unordered_set>
+#include <ostream> 
+#include <cmath>
+#include <iomanip> 
+#include <unordered_map>
+#include <queue> 
+#include <limits>  
+#include <algorithm>
+#include <chrono>
+
+using namespace std;
+
+
+struct Node {
+    float x, y;
+
+    Node() : x(0), y(0) {}
+    Node(float _x, float _y) : x(_x), y(_y) {}
+
+    bool operator<(const Node& other) const {
+        return tie(x, y) < tie(other.x, other.y);
+    }
+    bool operator==(const Node& other) const {
+        return x == other.x && y == other.y;
+    }
+    bool operator!=(const Node& other) const {
+        return !(*this == other);
+    }
+    friend ostream& operator<<(ostream& os, const Node& node) {
+        os << "(" << node.x << ", " << node.y << ")";
+        return os;
+    }
+};
+
+struct NodeHash {
+    size_t operator()(const Node& node) const {
+        size_t h1 = hash<float>{}(node.x);
+        size_t h2 = hash<float>{}(node.y);
+        return h1 ^ (h2 * 31); 
+    }
+};
+
+
+Node homeID = Node{59.972610, 30.302300}; 
+Node itmoID = Node{30.308108, 59.957239}; 
+
+struct Graph {
+    map<Node, vector<pair<Node, float>>> adj;
+
+    void addEdge(const Node& u, const Node& v, float weight) {
+        adj[u].push_back({v, weight}); 
+        adj[v].push_back({u, weight}); 
+    }
+    bool findNode(const vector<Node>& visited, const Node& value) {
+        for (const auto& node : visited) {
+            if (node == value) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+
+    float pifagor(Node node, Node homeID) {
+        return sqrt((node.x - homeID.x) * (node.x - homeID.x) + (node.y - homeID.y) * (node.y - homeID.y));
+    }
+
+    Node closestUzel(){
+        float minDist = numeric_limits<float>::max();
+        float dist;
+        Node closestNode;
+        for (const auto& entry : adj) {
+            const Node& node = entry.first;
+            dist = pifagor(node, homeID);
+            if (dist < minDist){
+                minDist = dist;
+                closestNode = node;
+            }
+        }
+
+        cout << fixed << setprecision(7) << "(" << closestNode.x << ", " << closestNode.y << ") ";
+
+        return closestNode;
+    }
+
+    bool bfs(const Node& start, const Node& target, vector<Node>& path) {
+        unordered_set<Node, NodeHash> visited; 
+        unordered_map<Node, Node, NodeHash> parent; 
+
+        queue<Node> q; 
+        q.push(start);
+        visited.insert(start);
+
+        while (!q.empty()) {
+            Node current = q.front();
+            q.pop();
+
+            if (current == target) {
+                Node step = target;
+                while ((step == start) == false) {
+                    path.push_back(step);
+                    step = parent[step];
+                }
+                path.push_back(start);
+                for (size_t i = 0, j = path.size() - 1; i < j; ++i, --j) {
+    swap(path[i], path[j]);
+}
+                return true;
+            }
+            for (const auto& neighbor : adj[current]) {
+                if (visited.find(neighbor.first) == visited.end()) {
+                    visited.insert(neighbor.first);
+                    parent[neighbor.first] = current;
+                    q.push(neighbor.first);
+                }
+            }
+        }
+        return false; 
+    }
+
+    void findShortestPathBFS(const Node& start, const Node& target) {
+        vector<Node> path;
+        if (bfs(start, target, path)) {
+            cout << "BFS Кратчайший путь найден от Вязьмы до ITMO ";
+             for (const auto& node : path) {
+                 cout << "(" << node.x << ", " << node.y << ") ";
+             }
+             cout << endl;
+        } else {
+            cout << "Путь не найден от Вязьмы до ITMO" << endl;
+        }
+    }
+
+bool dfs(const Node& current, const Node& target, 
+            unordered_set<Node, NodeHash>& visited, 
+            vector<Node>& path, 
+            vector<Node>& best_path) {
+        if (visited.find(current) != visited.end()) {
+            return false; // Узел уже посещен
+        }
+        visited.insert(current); 
+        path.push_back(current); 
+
+        if (current == target) {
+            if (best_path.empty() || path.size() < best_path.size()) {
+                best_path = path; // Обновляем кратчайший путь
+            }
+        } else {
+            for (const auto& neighbor : adj[current]) {
+                if (visited.find(neighbor.first) == visited.end()) {
+                    dfs(neighbor.first, target, visited, path, best_path);
+                }
+            }
+        }
+
+        path.pop_back();
+        visited.erase(current);
+        return !best_path.empty(); 
+    }
+
+
+    void findPathDFS(const Node& homeID, const Node& itmoID) {
+        unordered_set<Node, NodeHash> visited;
+        vector<Node> path;
+        vector<Node> best_path;
+        float min_cost = numeric_limits<float>::max(); 
+        dfs(homeID, itmoID, visited, path, best_path);
+        if (!best_path.empty()) {
+            cout << "Путь (DFS от Вязьмы до ITMO: ";
+             for (const auto& node : best_path) {
+                 cout << "(" << node.x << ", " << node.y << ") ";
+             }
+            cout << "\nКоличество рёбер: " << best_path.size() - 1 << endl;
+        } else {
+            cout << "Путь не найден от Вязьмы до ITMO." << endl;
+        }
+    }
+
+
+
+
+void dijkstra(const Node& start, const Node& target) {
+
+    unordered_map<Node, float, NodeHash> distances;
+    for (const auto& entry : adj) {
+        distances[entry.first] = numeric_limits<float>::max();
+    }
+    distances[start] = 0; 
+    using PQElement = pair<float, Node>;
+    priority_queue<PQElement, vector<PQElement>, greater<>> pq;
+    pq.push({0, start});
+    unordered_set<Node, NodeHash> visited;
+    unordered_map<Node, Node, NodeHash> previous;
+
+    while (!pq.empty()) {
+        auto [currentDistance, currentNode] = pq.top();
+        pq.pop();
+        if (visited.find(currentNode) != visited.end()) continue;
+
+        visited.insert(currentNode);
+        if (currentNode == target) break;
+        for (const auto& neighbor : adj[currentNode]) {
+            const Node& neighborNode = neighbor.first;
+            float weight = neighbor.second;
+
+            if (visited.find(neighborNode) == visited.end()) {
+                float newDistance = currentDistance + weight;
+                if (newDistance < distances[neighborNode]) {
+                    distances[neighborNode] = newDistance;
+                    pq.push({newDistance, neighborNode});
+                    previous[neighborNode] = currentNode;
+                }
+            }
+        }
+    }
+
+    if (distances[target] < numeric_limits<float>::max()) {
+        cout << "Кратчайший путь найден: расстояние = " << distances[target] << endl;
+        vector<Node> path;
+        for (Node at = target; at != start; at = previous[at]) {
+            path.push_back(at);
+        }
+        path.push_back(start);
+        for (size_t i = 0, j = path.size() - 1; i < j; ++i, --j) {
+    swap(path[i], path[j]);
+}
+        cout << "Путь: ";
+        for (const auto& node : path) {
+            cout << "(" << node.x << ", " << node.y << ") ";
+        }
+        cout << endl;
+    } else {
+        cout << "мы не попадём на пары(" << endl;
+    }
+}
+
+
+    void time_for_DFS(Graph& graph, const Node& start, const Node& target) {
+        unordered_set<Node, NodeHash> visited;
+        vector<Node> path, best_path;
+        auto startTime = chrono::high_resolution_clock::now();
+        graph.dfs(start, target, visited, path, best_path);
+        auto endTime = chrono::high_resolution_clock::now(); 
+        auto duration = chrono::duration_cast<chrono::microseconds>(endTime - startTime).count();
+        cout << "Время выполнения DFS: " << duration << " мкс" << endl;
+    }
+
+    void time_for_BFS(Graph& graph, const Node& start, const Node& target) {
+        vector<Node> path;
+        auto startTime = chrono::high_resolution_clock::now(); 
+        graph.bfs(start, target, path);
+        auto endTime = chrono::high_resolution_clock::now(); 
+        auto duration = chrono::duration_cast<chrono::microseconds>(endTime - startTime).count();
+        cout << "Время выполнения BFS: " << duration << " мкс" << endl;
+    }
+
+    void time_for_Dijkstra(Graph& graph, const Node& start, const Node& target) {
+        auto startTime = chrono::high_resolution_clock::now(); 
+        graph.dijkstra(start, target);
+        auto endTime = chrono::high_resolution_clock::now();
+        auto duration = chrono::duration_cast<chrono::microseconds>(endTime - startTime).count();
+        cout << "Время выполнения Дейкстры: " << duration << " мкс" << endl;
+    }
+
+   
+};
+
+int main() {
+    Graph graph;
+    ifstream file("C:\\Users\\Кирилл\\Downloads\\spb_graph.txt");
+    string line;
+    while (getline(file, line)) {
+            size_t pos = 0, next_pos;
+            next_pos = line.find(",", pos);
+            if (next_pos == string::npos) break;
+            float x1 = stof(line.substr(pos, next_pos - pos));
+            pos = next_pos + 1;
+            next_pos = line.find(":", pos);
+            if (next_pos == string::npos) break;
+            float y1 = stof(line.substr(pos, next_pos - pos));
+            Node node1(x1, y1); 
+            pos = next_pos + 1;
+            while (pos < line.size()) {
+                next_pos = line.find(";", pos);
+                string neighbor = line.substr(pos, next_pos - pos);
+
+                size_t sub_pos = 0, sub_next_pos;
+                sub_next_pos = neighbor.find(",", sub_pos);
+                if (sub_next_pos == string::npos) break;
+                float x2 = stof(neighbor.substr(sub_pos, sub_next_pos - sub_pos));
+
+                sub_pos = sub_next_pos + 1;
+                sub_next_pos = neighbor.find(",", sub_pos);
+                if (sub_next_pos == string::npos) break;
+                float y2 = stof(neighbor.substr(sub_pos, sub_next_pos - sub_pos));
+                sub_pos = sub_next_pos + 1;
+                if (sub_pos >= neighbor.size()) break;
+                float weight = stof(neighbor.substr(sub_pos));
+                Node node2(x2, y2);
+                graph.addEdge(node1, node2, weight);
+                if (next_pos == string::npos) break;
+                pos = next_pos + 1;
+            }
+        } 
+    
+    file.close();
+    Node start = Node{59.972610, 30.302300}; // вязьма
+    Node target = Node{30.3080368, 59.9573021}; // itmo
+    cout << "Время всех алгосов" << endl;
+    graph.time_for_DFS(graph, start , target);     
+    //graph.time_for_BFS(graph, start, target);      
+    //graph.time_for_Dijkstra(graph, start, target);        
+    //graph.findPathDFS(start, target);
+    //graph.findShortestPathBFS();
+    //graph.dijkstra(start, target); 
+    return 0;
+}
